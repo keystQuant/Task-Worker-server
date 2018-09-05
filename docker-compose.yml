@@ -1,0 +1,157 @@
+version: "3"
+
+services:
+  db:
+    build: ./config/postgres
+    container_name: keyst-worker-db
+    networks:
+      - keystone
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_volume:/etc/postgresql
+      - postgres_log:/var/log/postgresql
+      - postgres_lib:/var/lib/postgresql
+    restart: unless-stopped
+
+  redis:
+    container_name: keyst-worker-redis
+    command: redis-server --requirepass keystoneredisadmin2018 --appendonly yes
+    image: redis
+    networks:
+      - keystone
+    ports:
+      - 6379:6379
+    restart: unless-stopped
+    volumes:
+      - cache_data:/data
+
+  rabbit:
+    container_name: keyst-worker-rabbit
+    environment:
+      - RABBITMQ_DEFAULT_USER=admin
+      - RABBITMQ_DEFAULT_PASS=keystonerabbitadmin2018
+    image: rabbitmq:3-management
+    networks:
+      - keystone
+    ports:
+      - 5672:5672
+      - 15672:15672
+    restart: unless-stopped
+
+  web:
+    build: .
+    container_name: keyst-worker-django
+    depends_on:
+      - db
+      - redis
+      - rabbit
+    environment:
+      PG_HOST: db
+    links:
+      - db:db
+      - redis:redis
+      - rabbit:rabbit
+    networks:
+      - keystone
+    restart: unless-stopped
+
+  celery:
+    build:
+      context: .
+      dockerfile: Celerydocker
+    container_name: keyst-worker-celery
+    depends_on:
+      - web
+    environment:
+      PG_HOST: db
+    links:
+      - db:db
+      - redis:redis
+      - rabbit:rabbit
+    networks:
+      - keystone
+    restart: unless-stopped
+
+  celerybeat:
+    build:
+      context: .
+      dockerfile: Beatdocker
+    container_name: keyst-worker-celerybeat
+    depends_on:
+      - web
+    environment:
+      PG_HOST: db
+    links:
+      - db:db
+      - redis:redis
+      - rabbit:rabbit
+    networks:
+      - keystone
+    restart: unless-stopped
+
+  flower:
+    build:
+      context: .
+      dockerfile: Flowerdocker
+    container_name: keyst-worker-flower
+    depends_on:
+      - web
+    environment:
+      PG_HOST: db
+    links:
+      - db:db
+      - redis:redis
+      - rabbit:rabbit
+    networks:
+      - keystone
+    ports:
+      - 5555:5555
+    restart: unless-stopped
+
+  nginx:
+    build: ./config/nginx
+    container_name: keyst-worker-nginx
+    depends_on:
+      - web
+    links:
+      - web:web
+    networks:
+      - keystone
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+
+  socket:
+    build: ./socket-server
+    container_name: keyst-worker-socket
+    depends_on:
+      - db
+    links:
+      - db:db
+    networks:
+      - keystone
+    restart: unless-stopped
+
+  nginx:
+    build: ./config/nginx
+    container_name: keyst-worker-nginx
+    depends_on:
+      - socket
+    links:
+      - socket:socket
+    networks:
+      - keystone
+    ports:
+      - 7777:7777
+    restart: unless-stopped
+
+networks:
+  keystone:
+    driver: bridge
+
+volumes:
+  postgres_volume:
+  postgres_log:
+  postgres_lib:
+  cache_data:

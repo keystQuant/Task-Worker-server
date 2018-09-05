@@ -78,14 +78,14 @@ WSGI_APPLICATION = 'keystone.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'keystone',
         'USER': 'keystone',
         'PASSWORD': 'keystoneinvestmentpostgresql2018',
-        'HOST': 'db',
+        'HOST': os.environ.get('PG_HOST', 'db'),
         'PORT': 5432,
     },
-}
+} # --> 도커 컨테이너인 'db'가 제대로 인식되지 않음
 
 AUTH_PASSWORD_VALIDATORS = [
     {
